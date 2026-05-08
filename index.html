@@ -381,8 +381,26 @@ function sortedPair(a, b) {
   return fifaRank(a) <= fifaRank(b) ? [a, b] : [b, a];
 }
 
+// Each B3 slot (index 0–7) has a forbidden group (the group whose winner/RU is already in that match)
+const B3_FORBIDDEN = ['E','A','G','I','J','L','L','H'];
+
+function assignBestThird(teams, gs) {
+  const teamGroup = {};
+  Object.entries(gs).forEach(([grp, ts]) => { if (ts[2]) teamGroup[ts[2]] = grp; });
+  const sorted = [...teams].sort((a,b) => fifaRank(a)-fifaRank(b));
+  const assigned = new Array(8).fill(null);
+  const used = new Set();
+  for (let slot = 0; slot < 8; slot++) {
+    const forbidden = B3_FORBIDDEN[slot];
+    const team = sorted.find(t => !used.has(t) && teamGroup[t] !== forbidden)
+               || sorted.find(t => !used.has(t)); // fallback if all remaining are forbidden
+    if (team) { assigned[slot] = team; used.add(team); }
+  }
+  return assigned;
+}
+
 function buildRoundOf32(gs, bestThird) {
-  const bt = [...bestThird].sort((a,b) => fifaRank(a)-fifaRank(b));
+  const bt = assignBestThird(bestThird, gs);
   return R32_SLOTS.map((slot, i) => {
     let [top, bottom] = sortedPair(resolveSlot(slot.top,gs,bt), resolveSlot(slot.bottom,gs,bt));
     return {id:`r32-${i}`, top, bottom, winner:null};
