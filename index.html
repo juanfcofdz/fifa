@@ -356,15 +356,24 @@ const SCHEDULE = {
 // ─────────────────────────────────────────────────────────────
 // BRACKET UTILS
 // ─────────────────────────────────────────────────────────────
+// R32 slots ordered to match SCHEDULE.roundOf32 indices (M73→M76→M74→M75→M78→M77→M79→M80→M82→M81→M84→M83→M85→M88→M86→M87)
 const R32_SLOTS = [
-  {top:'RU-A',bottom:'RU-B'},{top:'W-C',bottom:'RU-F'},
-  {top:'W-E',bottom:'B3-1'},{top:'RU-E',bottom:'RU-I'},
-  {top:'W-F',bottom:'RU-G'},{top:'W-A',bottom:'B3-2'},
-  {top:'W-G',bottom:'B3-3'},{top:'W-I',bottom:'B3-4'},
-  {top:'RU-H',bottom:'RU-K'},{top:'W-J',bottom:'B3-5'},
-  {top:'W-K',bottom:'RU-D'},{top:'W-D',bottom:'RU-J'},
-  {top:'W-L',bottom:'B3-6'},{top:'RU-L',bottom:'B3-7'},
-  {top:'W-H',bottom:'B3-8'},{top:'W-B',bottom:'RU-C'},
+  {top:'RU-A', bottom:'RU-B'},   // M73  LA          2A vs 2B
+  {top:'W-C',  bottom:'RU-F'},   // M76  Houston     1C vs 2F
+  {top:'W-E',  bottom:'B3-1'},   // M74  Boston      1E vs 3ABCDF
+  {top:'W-F',  bottom:'RU-C'},   // M75  Monterrey   1F vs 2C
+  {top:'RU-E', bottom:'RU-I'},   // M78  Dallas      2E vs 2I
+  {top:'W-I',  bottom:'B3-2'},   // M77  MetLife     1I vs 3CDFGH
+  {top:'W-A',  bottom:'B3-3'},   // M79  Mexico City 1A vs 3CEFHI
+  {top:'W-L',  bottom:'B3-4'},   // M80  Atlanta     1L vs 3EHIJK
+  {top:'W-G',  bottom:'B3-5'},   // M82  Seattle     1G vs 3AEHIJ
+  {top:'W-D',  bottom:'B3-6'},   // M81  SF          1D vs 3BEFIJ
+  {top:'W-H',  bottom:'RU-J'},   // M84  LA          1H vs 2J
+  {top:'RU-K', bottom:'RU-L'},   // M83  Toronto     2K vs 2L
+  {top:'W-B',  bottom:'B3-7'},   // M85  Vancouver   1B vs 3EFGIJ
+  {top:'RU-D', bottom:'RU-G'},   // M88  Dallas      2D vs 2G
+  {top:'W-J',  bottom:'RU-H'},   // M86  Miami       1J vs 2H
+  {top:'W-K',  bottom:'B3-8'},   // M87  Kansas City 1K vs 3DEIJL
 ];
 
 function resolveSlot(code, gs, bt) {
@@ -381,8 +390,17 @@ function sortedPair(a, b) {
   return fifaRank(a) <= fifaRank(b) ? [a, b] : [b, a];
 }
 
-// Each B3 slot (index 0–7) has a forbidden group (the group whose winner/RU is already in that match)
-const B3_FORBIDDEN = ['E','A','G','I','J','L','L','H'];
+// Official FIFA 2026 eligible groups per B3 slot (matches B3-1 through B3-8 in R32_SLOTS order)
+const B3_ELIGIBLE = [
+  ['A','B','C','D','F'],   // B3-1: 1E vs 3ABCDF
+  ['C','D','F','G','H'],   // B3-2: 1I vs 3CDFGH
+  ['C','E','F','H','I'],   // B3-3: 1A vs 3CEFHI
+  ['E','H','I','J','K'],   // B3-4: 1L vs 3EHIJK
+  ['A','E','H','I','J'],   // B3-5: 1G vs 3AEHIJ
+  ['B','E','F','I','J'],   // B3-6: 1D vs 3BEFIJ
+  ['E','F','G','I','J'],   // B3-7: 1B vs 3EFGIJ
+  ['D','E','I','J','L'],   // B3-8: 1K vs 3DEIJL
+];
 
 function assignBestThird(teams, gs) {
   const teamGroup = {};
@@ -391,9 +409,9 @@ function assignBestThird(teams, gs) {
   const assigned = new Array(8).fill(null);
   const used = new Set();
   for (let slot = 0; slot < 8; slot++) {
-    const forbidden = B3_FORBIDDEN[slot];
-    const team = sorted.find(t => !used.has(t) && teamGroup[t] !== forbidden)
-               || sorted.find(t => !used.has(t)); // fallback if all remaining are forbidden
+    const eligible = B3_ELIGIBLE[slot];
+    const team = sorted.find(t => !used.has(t) && eligible.includes(teamGroup[t]))
+               || sorted.find(t => !used.has(t)); // fallback if no eligible team remains
     if (team) { assigned[slot] = team; used.add(team); }
   }
   return assigned;
