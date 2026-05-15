@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>FIFA 2026 World Cup Bracket</title>
+<title>Quiniela Mundial FIFA 2026</title>
 <style>
 /* ── Variables ───────────────────────────── */
 :root{
@@ -262,7 +262,7 @@ button{cursor:pointer;font-family:inherit;font-size:inherit;border:none;backgrou
     <div class="app-title">FIFA <span>2026</span> World Cup</div>
     <nav class="tab-bar">
       <button class="tab-btn active" data-tab="bracket">Bracket</button>
-      <button class="tab-btn" data-tab="stats">Stats</button>
+      <button class="tab-btn" data-tab="stats">Estadísticas</button>
     </nav>
   </div>
 </header>
@@ -1004,21 +1004,21 @@ function renderGroupStage() {
       </li>`;
     }).join('');
     return `<div class="group-card" data-group="${g}">
-      <div class="group-card-header"><span class="group-label">Group</span><span class="group-name">${g}</span></div>
+      <div class="group-card-header"><span class="group-label">Grupo</span><span class="group-name">${g}</span></div>
       <ul class="team-list" data-group="${g}">${rows}</ul>
     </div>`;
   }).join('');
 
   return `<div class="phase-header">
-    <div><div class="phase-title">Group Stage</div>
-    <div class="phase-subtitle">Drag teams to reorder · Top 2 advance · Best 8 third-place teams also qualify</div></div>
+    <div><div class="phase-title">Fase de Grupos</div>
+    <div class="phase-subtitle">Arrastra equipos para reordenar · Los primeros 2 avanzan · Los mejores 8 terceros también clasifican</div></div>
     <div class="bracket-phase-steps">
-      <span class="step active">Groups</span><span class="sep">›</span>
-      <span class="step">Best 3rd</span><span class="sep">›</span><span class="step">Bracket</span>
+      <span class="step active">Grupos</span><span class="sep">›</span>
+      <span class="step">Mejores 3ros</span><span class="sep">›</span><span class="step">Bracket</span>
     </div>
   </div>
   <div class="groups-grid">${cards}</div>
-  <div class="stage-actions"><button class="btn-cta" id="lock-btn">Set Group Stage →</button></div>`;
+  <div class="stage-actions"><button class="btn-cta" id="lock-btn">Confirmar Grupos →</button></div>`;
 }
 
 function bindGroupStage(wrap) {
@@ -1072,30 +1072,30 @@ function renderBestThird() {
       <span class="third-check">${sel?'✓':''}</span>
       <span class="team-flag">${t.flag}</span>
       <span class="team-name" style="flex:1">${team}</span>
-      <span class="third-group">3rd / ${group}</span>
+      <span class="third-group">3ro / ${group}</span>
       <span class="third-rank">FIFA #${t.fifaRank}</span>
     </li>`;
   }).join('');
 
   return `<div class="best-third-page">
     <div class="phase-header">
-      <div><div class="phase-title">Best 3rd Place Teams</div>
-      <div class="phase-subtitle">Select exactly 8 of 12 third-place finishers to advance to the Round of 32</div></div>
+      <div><div class="phase-title">Mejores Terceros Lugares</div>
+      <div class="phase-subtitle">Selecciona exactamente 8 de 12 terceros lugares para clasificar a la Ronda de 32</div></div>
       <div class="bracket-phase-steps">
-        <span class="step done">Groups ✓</span><span class="sep">›</span>
-        <span class="step active">Best 3rd</span><span class="sep">›</span><span class="step">Bracket</span>
+        <span class="step done">Grupos ✓</span><span class="sep">›</span>
+        <span class="step active">Mejores 3ros</span><span class="sep">›</span><span class="step">Bracket</span>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;">
       <div class="third-counter ${count===8?'complete':count>8?'over':''}">
-        <strong>${count}</strong> of 8 selected
+        <strong>${count}</strong> de 8 seleccionados
       </div>
-      <span class="text-muted text-small">Sorted by FIFA ranking · Pre-selected by ranking</span>
+      <span class="text-muted text-small">Ordenados por ranking FIFA · Pre-seleccionados por ranking</span>
     </div>
     <ul class="third-list">${items}</ul>
     <div class="stage-actions">
-      <button class="btn-ghost" id="back-btn">← Back to Groups</button>
-      <button class="btn-cta" id="set-bracket-btn" ${count===8?'':'disabled'}>Set Bracket →</button>
+      <button class="btn-ghost" id="back-btn">← Volver a Grupos</button>
+      <button class="btn-cta" id="set-bracket-btn" ${count===8?'':'disabled'}>Confirmar Bracket →</button>
     </div>
   </div>`;
 }
@@ -1116,11 +1116,11 @@ function bindBestThird(wrap) {
 // BRACKET
 // ─────────────────────────────────────────────────────────────
 const ROUND_CFG = [
-  {key:'roundOf32',    label:'Round of 32',   cls:'r32',   sk:'roundOf32'},
-  {key:'roundOf16',   label:'Round of 16',   cls:'r16',   sk:'roundOf16'},
-  {key:'quarterFinals',label:'Quarterfinals', cls:'qf',    sk:'quarterFinals'},
-  {key:'semiFinals',  label:'Semifinals',    cls:'sf',    sk:'semiFinals'},
-  {key:'final',       label:'Final',         cls:'final', sk:'final'},
+  {key:'roundOf32',    label:'Ronda de 32',      cls:'r32',   sk:'roundOf32'},
+  {key:'roundOf16',   label:'Octavos de Final', cls:'r16',   sk:'roundOf16'},
+  {key:'quarterFinals',label:'Cuartos de Final', cls:'qf',    sk:'quarterFinals'},
+  {key:'semiFinals',  label:'Semifinales',      cls:'sf',    sk:'semiFinals'},
+  {key:'final',       label:'Final',            cls:'final', sk:'final'},
 ];
 
 function renderBracket() {
@@ -1147,23 +1147,24 @@ function renderBracket() {
   }).join('');
 
   return `<div class="phase-header">
-    <div><div class="phase-title">Knockout Bracket</div>
-    <div class="phase-subtitle">Click a team to pick them as winner · Click again to change</div></div>
+    <div><div class="phase-title">Bracket de Eliminación</div>
+    <div class="phase-subtitle">Haz clic en un equipo para elegirlo · Haz clic de nuevo para cambiar</div></div>
     <div class="bracket-phase-steps">
-      <span class="step done">Groups ✓</span><span class="sep">›</span>
-      <span class="step done">Best 3rd ✓</span><span class="sep">›</span>
+      <span class="step done">Grupos ✓</span><span class="sep">›</span>
+      <span class="step done">Mejores 3ros ✓</span><span class="sep">›</span>
       <span class="step active">Bracket</span>
     </div>
   </div>
   <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
-    <button class="btn-ghost" id="reset-btn">← Back to Groups</button>
-    <span class="text-muted text-small">Tip: changing a pick clears all downstream matches automatically</span>
+    <button class="btn-ghost" id="back-to-third-btn">← Cambiar Terceros</button>
+    <button class="btn-ghost" id="reset-btn">⟳ Empezar de Nuevo</button>
+    <span class="text-muted text-small">Tip: cambiar un pick elimina automáticamente los partidos siguientes</span>
   </div>
   <div class="bracket-scroll-outer"><div class="bracket-inner">${rounds}</div></div>`;
 }
 
 function teamSlot(team, roundKey, matchId, winner, bothKnown) {
-  if(!team) return `<div class="bracket-team tbd"><span class="bt-name tbd-text">TBD</span></div>`;
+  if(!team) return `<div class="bracket-team tbd"><span class="bt-name tbd-text">PD</span></div>`;
   const t = TEAMS[team];
   const isWinner = winner===team, isLoser = winner&&winner!==team;
   let cls = 'bracket-team';
@@ -1182,12 +1183,12 @@ function renderChampion(champion) {
   const t = TEAMS[champion];
   return `<div class="champion-banner">
     <div class="champion-trophy">🏆</div>
-    <div class="champion-label">World Champion 2026</div>
+    <div class="champion-label">Campeón Mundial 2026</div>
     <div class="champion-flag">${t?.flag||''}</div>
     <div class="champion-name">${champion}</div>
     <div class="champion-reset">
-      <button class="btn-ghost" id="reset-btn">← Start Over</button>
-      <button class="btn-cta" id="view-bracket-btn" style="margin-left:12px">View Full Bracket</button>
+      <button class="btn-ghost" id="reset-btn">⟳ Empezar de Nuevo</button>
+      <button class="btn-cta" id="view-bracket-btn" style="margin-left:12px">Ver Bracket Completo</button>
       ${S.quiniela&&!S.quiniela.enteringResults?`<button class="btn-cta" id="submit-picks-btn" style="margin-left:12px;background:var(--mx-green)">✅ Guardar picks</button>`:''}
       ${S.quiniela?.enteringResults?`<button class="btn-cta" id="submit-results-btn" style="margin-left:12px;background:var(--mx-red)">📊 Calcular puntos</button>`:''}
     </div>
@@ -1195,8 +1196,13 @@ function renderChampion(champion) {
 }
 
 function bindBracket(wrap) {
+  wrap.querySelector('#back-to-third-btn')?.addEventListener('click', () => {
+    const tp = getThirdPlaceTeams(S.groupStandings);
+    S = {...S, phase:'best-third', thirdPlaceTeams:tp};
+    render();
+  });
   wrap.querySelector('#reset-btn')?.addEventListener('click', () => {
-    if(confirm('Go back to Groups? Your bracket progress will be lost.'))
+    if(confirm('¿Empezar de nuevo? Se perderá tu progreso en el bracket.'))
       dispatch({type:'RESET_ALL'});
   });
   wrap.querySelector('#view-bracket-btn')?.addEventListener('click', () => {
@@ -1258,7 +1264,7 @@ function renderStats() {
         <span class="poly-pct">${pct}%</span>
       </div>`;
     }).join('');
-    return `<div class="poly-group-card"><div class="poly-group-title">Group ${g}</div>${rows}</div>`;
+    return `<div class="poly-group-card"><div class="poly-group-title">Grupo ${g}</div>${rows}</div>`;
   }).join('');
 
   const rankRows = Object.entries(TEAMS).sort((a,b)=>a[1].fifaRank-b[1].fifaRank).map(([name,t])=>
@@ -1271,32 +1277,32 @@ function renderStats() {
   ).join('');
 
   return `<div class="phase-header">
-    <div><div class="phase-title">Reference Stats</div>
-    <div class="phase-subtitle">Data used to pre-populate group predictions</div></div>
+    <div><div class="phase-title">Estadísticas</div>
+    <div class="phase-subtitle">Datos usados para pre-ordenar los grupos</div></div>
   </div>
   <div class="stats-tabs">
-    <button class="stats-tab active" data-tab="poly">Polymarket Odds</button>
-    <button class="stats-tab" data-tab="fifa">FIFA Rankings</button>
+    <button class="stats-tab active" data-tab="poly">Favoritos Polymarket</button>
+    <button class="stats-tab" data-tab="fifa">Ranking FIFA</button>
   </div>
   <div id="sp-poly">
     <div class="stats-section-header">
-      <span class="stats-section-title">Group Stage Win Odds</span>
-      <span class="stats-updated">Updated ${DATA_DATES.polymarket}</span>
+      <span class="stats-section-title">Probabilidad de ganar el grupo</span>
+      <span class="stats-updated">Actualizado ${DATA_DATES.polymarket}</span>
     </div>
     <div class="poly-groups-grid">${polyCards}</div>
-    <p class="stats-source">Source: Polymarket — implied probability of winning group</p>
+    <p class="stats-source">Fuente: Polymarket — probabilidad implícita de ganar el grupo</p>
   </div>
   <div id="sp-fifa" class="hidden">
     <div class="stats-section-header">
-      <span class="stats-section-title">FIFA World Rankings</span>
-      <span class="stats-updated">Updated ${DATA_DATES.fifaRankings}</span>
-      <span class="stats-updated">Next update ${DATA_DATES.fifaNextUpdate}</span>
+      <span class="stats-section-title">Ranking Mundial FIFA</span>
+      <span class="stats-updated">Actualizado ${DATA_DATES.fifaRankings}</span>
+      <span class="stats-updated">Próxima actualización ${DATA_DATES.fifaNextUpdate}</span>
     </div>
     <table class="rankings-table">
-      <thead><tr><th>Rank</th><th>Flag</th><th>Team</th><th>Group</th></tr></thead>
+      <thead><tr><th>Pos.</th><th>Bandera</th><th>Equipo</th><th>Grupo</th></tr></thead>
       <tbody>${rankRows}</tbody>
     </table>
-    <p class="stats-source">Source: FIFA.com — official FIFA/Coca-Cola Men's World Ranking</p>
+    <p class="stats-source">Fuente: FIFA.com — Ranking Oficial FIFA/Coca-Cola</p>
   </div>`;
 }
 
