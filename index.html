@@ -357,11 +357,11 @@ async function fbSubmitResults(groupCode, adminPassword, bracketState) {
     champion: bracketState.bracket?.champion || null,
     enteredAt: firebase.firestore.FieldValue.serverTimestamp()
   };
-  await db.collection('groups').doc(groupCode).collection('entries').doc('__results__').set(resultsPayload);
+  await db.collection('groups').doc(groupCode).collection('entries').doc('resultados_oficiales').set(resultsPayload);
   const entries = await db.collection('groups').doc(groupCode).collection('entries').get();
   const batch = db.batch();
   entries.docs.forEach(d => {
-    if (d.id === '__results__') return;
+    if (d.id === 'resultados_oficiales') return;
     const score = computeScore(d.data(), bracketState);
     batch.update(d.ref, { score });
   });
@@ -371,11 +371,11 @@ async function fbSubmitResults(groupCode, adminPassword, bracketState) {
 async function fbLoadLeaderboard(groupCode) {
   const [entriesSnap, resultsSnap] = await Promise.all([
     db.collection('groups').doc(groupCode).collection('entries').get(),
-    db.collection('groups').doc(groupCode).collection('entries').doc('__results__').get()
+    db.collection('groups').doc(groupCode).collection('entries').doc('resultados_oficiales').get()
   ]);
   const hasResults = resultsSnap.exists;
   const entries = entriesSnap.docs
-    .filter(d => d.id !== '__results__')
+    .filter(d => d.id !== 'resultados_oficiales')
     .map(d => ({ id: d.id, ...d.data() }))
     .sort((a,b) => (b.score ?? -1) - (a.score ?? -1));
   return { entries, hasResults };
