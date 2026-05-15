@@ -254,6 +254,30 @@ button{cursor:pointer;font-family:inherit;font-size:inherit;border:none;backgrou
 /* ── Phase notes ─────────────────────────── */
 .phase-note{display:flex;gap:10px;align-items:flex-start;background:#fffbe6;border:1px solid #ffe58f;border-radius:var(--radius);padding:10px 14px;margin-bottom:var(--sp-md);font-size:12px;color:#5a4a00;line-height:1.55;}
 .phase-note-icon{font-size:15px;flex-shrink:0;margin-top:1px;}
+/* ── Scoring scheme ──────────────────────── */
+.scoring-scheme{background:var(--color-surface);border-radius:var(--radius-lg);padding:16px 20px;box-shadow:var(--shadow);margin-bottom:var(--sp-md);}
+.scoring-title{font-size:13px;font-weight:700;margin-bottom:10px;}
+.scoring-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;}
+.scoring-item{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:5px 8px;border-radius:var(--radius-sm);background:var(--color-bg);}
+.scoring-item.champion-row{background:#fff8e1;border:1px solid #ffe082;}
+.scoring-round{color:var(--color-muted);font-weight:500;}
+.scoring-pts{color:var(--color-text);}
+/* ── Picks table ─────────────────────────── */
+.picks-table-wrap{overflow-x:auto;border-radius:var(--radius-lg);box-shadow:var(--shadow);margin-bottom:4px;}
+.picks-table{width:100%;border-collapse:collapse;background:var(--color-surface);white-space:nowrap;font-size:13px;}
+.picks-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--color-muted);padding:10px 12px;border-bottom:2px solid var(--color-border);background:var(--color-surface);position:sticky;top:0;}
+.picks-table td{padding:10px 12px;border-bottom:1px solid var(--color-border);vertical-align:middle;}
+.picks-table tr:last-child td{border-bottom:none;}
+.picks-table tr.lb-you{background:#f0faf5;}
+.picks-cell{font-size:13px;}
+.picks-cell .pick-flag{font-size:16px;cursor:default;margin-right:2px;}
+.picks-cell .pick-name{font-size:12px;color:var(--color-text);}
+.picks-empty{color:var(--color-muted-2);}
+.champ-cell{font-weight:600;}
+.you-tag{font-size:10px;color:var(--mx-green);font-weight:400;margin-left:4px;}
+.lb-score-cell{font-size:14px;white-space:nowrap;}
+.th-sub{font-size:10px;font-weight:400;opacity:.7;}
+.pick-flag{display:inline-block;}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -922,49 +946,107 @@ function bindLobby(wrap) {
 // ─────────────────────────────────────────────────────────────
 // LEADERBOARD
 // ─────────────────────────────────────────────────────────────
+function extractPicks(bracket) {
+  if (!bracket) return null;
+  const winnersOf = (key) => (bracket[key]||[]).map(m=>m.winner).filter(Boolean);
+  const finalist = (bracket.final||[]).flatMap(m=>[m.top,m.bottom]).filter(t=>t&&t!==bracket.champion)[0]||null;
+  return {
+    champion:  bracket.champion,
+    finalist,
+    semis:     winnersOf('quarterFinals'),  // 4 equipos que jugaron SF
+    quarters:  winnersOf('roundOf16'),      // 8 equipos que jugaron QF
+    r16:       winnersOf('roundOf32'),      // 16 equipos que jugaron octavos
+  };
+}
+
+function flagCell(teams, max) {
+  if (!teams||!teams.length) return '<span class="picks-empty">—</span>';
+  const show = max ? teams.slice(0,max) : teams;
+  return show.map(t=>`<span class="pick-flag" title="${t}">${TEAMS[t]?.flag||'🏳'}</span>`).join('');
+}
+
 function renderLeaderboard() {
   const q = S.quiniela;
   const data = S.leaderboardData;
-  let body = '';
+
+  // ── Scoring scheme ──────────────────────────────────────────
+  const scoringBox = `<div class="scoring-scheme">
+    <div class="scoring-title">Sistema de puntos <span style="font-weight:400;color:var(--color-muted)">(máximo 160 pts)</span></div>
+    <div class="scoring-grid">
+      <div class="scoring-item"><span class="scoring-round">Dieciseisavos</span><span class="scoring-pts">1 pt × 16 partidos = <strong>16 pts</strong></span></div>
+      <div class="scoring-item"><span class="scoring-round">Octavos de final</span><span class="scoring-pts">2 pts × 8 = <strong>16 pts</strong></span></div>
+      <div class="scoring-item"><span class="scoring-round">Cuartos de final</span><span class="scoring-pts">4 pts × 4 = <strong>16 pts</strong></span></div>
+      <div class="scoring-item"><span class="scoring-round">Semifinales</span><span class="scoring-pts">8 pts × 2 = <strong>16 pts</strong></span></div>
+      <div class="scoring-item"><span class="scoring-round">Final (2do lugar)</span><span class="scoring-pts">16 pts × 1 = <strong>16 pts</strong></span></div>
+      <div class="scoring-item champion-row"><span class="scoring-round">🏆 Campeón</span><span class="scoring-pts"><strong>80 pts</strong> — equivale al 50% del total</span></div>
+    </div>
+    <p style="font-size:11px;color:var(--color-muted);margin-top:8px">Cada punto se otorga por acertar correctamente qué equipo avanzó en cada partido.</p>
+  </div>`;
+
+  // ── Picks table ─────────────────────────────────────────────
+  let table = '';
   if (!data) {
-    body = '<div class="loading-spinner">Cargando... ⏳</div>';
-  } else if (!data.entries || data.entries.length===0) {
-    body = '<p style="color:var(--color-muted);text-align:center;padding:40px 0">Aún no hay picks registrados.</p>';
+    table = '<div class="loading-spinner">Cargando picks... ⏳</div>';
+  } else if (!data.entries||data.entries.length===0) {
+    table = '<p style="color:var(--color-muted);text-align:center;padding:32px 0">Aún no hay picks registrados.</p>';
   } else {
-    const ranks=['🥇','🥈','🥉'];
-    const rows = data.entries.map((e,i)=>{
+    const sorted = [...data.entries].sort((a,b)=>(b.score??-1)-(a.score??-1));
+    const ranks = ['🥇','🥈','🥉'];
+    const rows = sorted.map((e,i)=>{
       const isYou = e.displayName===q?.displayName;
+      const p = extractPicks(e.bracket);
       const rankLbl = i<3?`<span class="lb-rank ${['gold','silver','bronze'][i]}">${ranks[i]}</span>`:`<span class="lb-rank">${i+1}</span>`;
-      const champ = e.champion?`<span class="lb-champion">${TEAMS[e.champion]?.flag||''} ${e.champion}</span>`:`<span style="color:var(--color-muted-2);font-size:12px">—</span>`;
-      const scoreLbl = e.score!=null?`<span class="lb-score">${e.score} pts</span>`:`<span class="lb-score pending">—</span>`;
-      return `<tr ${isYou?'class="lb-you"':''}><td>${rankLbl}</td><td class="lb-name">${e.displayName}${isYou?' <span style="font-size:10px;color:var(--mx-green);font-weight:400">tú</span>':''}</td><td>${champ}</td><td>${scoreLbl}</td></tr>`;
+      const scoreLbl = e.score!=null?`<strong>${e.score}</strong> pts`:`<span style="color:var(--color-muted-2)">—</span>`;
+      return `<tr ${isYou?'class="lb-you"':''}>
+        <td>${rankLbl}</td>
+        <td class="lb-name">${e.displayName}${isYou?' <span class="you-tag">tú</span>':''}</td>
+        <td class="lb-score-cell">${scoreLbl}</td>
+        <td class="picks-cell champ-cell">${p?.champion?`${TEAMS[p.champion]?.flag||''} <span class="pick-name">${p.champion}</span>`:'—'}</td>
+        <td class="picks-cell">${p?.finalist?`${TEAMS[p.finalist]?.flag||''} <span class="pick-name">${p.finalist}</span>`:'—'}</td>
+        <td class="picks-cell">${flagCell(p?.semis)}</td>
+        <td class="picks-cell">${flagCell(p?.quarters)}</td>
+        <td class="picks-cell">${flagCell(p?.r16)}</td>
+      </tr>`;
     }).join('');
-    body = `<table class="leaderboard-table"><thead><tr><th>#</th><th>Jugador</th><th>Campeón pick</th><th style="text-align:right">Puntos</th></tr></thead><tbody>${rows}</tbody></table>`;
+    table = `<div class="picks-table-wrap">
+      <table class="picks-table">
+        <thead><tr>
+          <th>#</th><th>Jugador</th><th>Pts</th>
+          <th>🏆 Campeón</th><th>🥈 2do lugar</th>
+          <th>Semifinales <span class="th-sub">(4)</span></th>
+          <th>Cuartos <span class="th-sub">(8)</span></th>
+          <th>Octavos <span class="th-sub">(16)</span></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
   }
 
+  // ── Admin / results ─────────────────────────────────────────
   const adminSection = q?.isAdmin && data && !data.hasResults ? `
-    <div style="margin-top:24px">
-      <details>
-        <summary style="cursor:pointer;font-size:13px;color:var(--color-muted);padding:8px 0">⚙️ Ingresar resultados reales (admin)</summary>
-        <div class="admin-section" style="margin-top:12px">
-          <div class="admin-warning">Solo tú puedes ingresar los resultados oficiales. Esto calculará los puntos de todos automáticamente.</div>
-          <input class="lobby-input" id="admin-pass-input" type="password" placeholder="Contraseña de admin"/>
-          <div class="lobby-error hidden" id="admin-err"></div>
-          <button class="lobby-btn primary" id="admin-enter-btn" style="margin-top:4px">Ingresar resultados →</button>
-        </div>
-      </details>
-    </div>` : (data?.hasResults?'<div style="margin-top:16px;padding:12px;background:#e8f5ed;border-radius:var(--radius);font-size:13px;color:var(--mx-green)">✅ Resultados oficiales ingresados</div>':'');
-
-  const pointsInfo = `<div style="margin-top:20px;padding:14px;background:var(--color-surface);border-radius:var(--radius);font-size:12px;color:var(--color-muted)">
-    <strong>Puntos:</strong> R32=1 · R16=2 · QF=4 · SF=8 · Final=16 · <strong>Campeón=80</strong> — máximo 160 pts
-  </div>`;
+    <details style="margin-top:20px">
+      <summary style="cursor:pointer;font-size:13px;color:var(--color-muted);padding:8px 0">⚙️ Ingresar resultados reales (admin)</summary>
+      <div class="admin-section" style="margin-top:12px">
+        <div class="admin-warning">Solo tú puedes ingresar los resultados oficiales. Esto calculará los puntos de todos automáticamente.</div>
+        <input class="lobby-input" id="admin-pass-input" type="password" placeholder="Contraseña de admin"/>
+        <div class="lobby-error hidden" id="admin-err"></div>
+        <button class="lobby-btn primary" id="admin-enter-btn" style="margin-top:4px">Ingresar resultados →</button>
+      </div>
+    </details>` : (data?.hasResults?'<div style="margin-top:12px;padding:10px 14px;background:#e8f5ed;border-radius:var(--radius);font-size:13px;color:var(--mx-green)">✅ Resultados oficiales ingresados — puntos calculados</div>':'');
 
   return `<div class="phase-header">
     <div><div class="phase-title">🏆 ${q?.groupName||'Quiniela'}</div>
     <div class="phase-subtitle">Código: <strong>${q?.groupCode}</strong> · Contraseña: <strong>${q?.sharedPassword}</strong></div></div>
   </div>
-  ${body}${adminSection}${pointsInfo}
-  <div class="leaderboard-actions">
+  ${scoringBox}
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+    <span style="font-size:14px;font-weight:600">Picks de los participantes</span>
+    <button class="btn-ghost" id="lb-refresh-btn" style="font-size:12px;padding:4px 10px">🔄 Actualizar</button>
+    <a href="https://www.google.com/search?q=FIFA+2026+World+Cup+results" target="_blank" rel="noopener" style="font-size:12px;color:var(--mx-green);text-decoration:none;margin-left:4px">🌐 Ver resultados actuales ↗</a>
+  </div>
+  ${table}
+  ${adminSection}
+  <div class="leaderboard-actions" style="margin-top:20px">
     <button class="btn-ghost" id="lb-back-bracket">← Mi bracket</button>
     <button class="btn-ghost" id="lb-back-lobby">Salir de quiniela</button>
   </div>`;
@@ -976,6 +1058,11 @@ function bindLeaderboard(wrap) {
     render();
   });
   wrap.querySelector('#lb-back-lobby')?.addEventListener('click', ()=>dispatch({type:'BACK_TO_LOBBY'}));
+  wrap.querySelector('#lb-refresh-btn')?.addEventListener('click', ()=>{
+    S = {...S, leaderboardData:null};
+    render();
+    fbLoadLeaderboard(S.quiniela.groupCode).then(data=>dispatch({type:'SET_LEADERBOARD_DATA',data})).catch(()=>{});
+  });
   wrap.querySelector('#admin-enter-btn')?.addEventListener('click', ()=>{
     const pw = wrap.querySelector('#admin-pass-input')?.value.trim();
     const errEl = wrap.querySelector('#admin-err');
@@ -1169,7 +1256,8 @@ function renderBracket() {
   <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
     <button class="btn-ghost" id="back-to-third-btn">← Cambiar Terceros</button>
     <button class="btn-ghost" id="reset-btn">⟳ Empezar de Nuevo</button>
-    <span class="text-muted text-small">Tip: cambiar un pick elimina automáticamente los partidos siguientes</span>
+    ${S.quiniela?`<button class="btn-cta" id="finish-btn" style="margin-left:auto">Terminar y ver quiniela →</button>`:''}
+    <span class="text-muted text-small" style="${S.quiniela?'width:100%':''}">Tip: cambiar un pick elimina automáticamente los partidos siguientes</span>
   </div>
   <div class="bracket-scroll-outer"><div class="bracket-inner">${rounds}</div></div>`;
 }
@@ -1199,8 +1287,8 @@ function renderChampion(champion) {
     <div class="champion-name">${champion}</div>
     <div class="champion-reset">
       <button class="btn-ghost" id="reset-btn">⟳ Empezar de Nuevo</button>
-      <button class="btn-cta" id="view-bracket-btn" style="margin-left:12px">Ver Bracket Completo</button>
-      ${S.quiniela&&!S.quiniela.enteringResults?`<button class="btn-cta" id="submit-picks-btn" style="margin-left:12px;background:var(--mx-green)">✅ Guardar picks</button>`:''}
+      <button class="btn-ghost" id="view-bracket-btn" style="margin-left:12px">Ver Bracket Completo</button>
+      ${S.quiniela&&!S.quiniela.enteringResults?`<button class="btn-cta" id="finish-btn" style="margin-left:12px">Terminar y ver quiniela →</button>`:''}
       ${S.quiniela?.enteringResults?`<button class="btn-cta" id="submit-results-btn" style="margin-left:12px;background:var(--mx-red)">📊 Calcular puntos</button>`:''}
     </div>
   </div>`;
@@ -1230,19 +1318,21 @@ function bindBracket(wrap) {
     });
     el.addEventListener('keydown', e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}});
   });
-  wrap.querySelector('#submit-picks-btn')?.addEventListener('click', async ()=>{
-    const btn = wrap.querySelector('#submit-picks-btn');
+  const finishAndSubmit = async (btn) => {
     btn.disabled=true; btn.textContent='Guardando...';
     try {
-      const entryId = await fbSubmitPick(S.quiniela.groupCode, S.quiniela.displayName, S);
-      S = {...S, quiniela:{...S.quiniela, entryId}};
-      try { localStorage.setItem('fifa-quiniela-session', JSON.stringify({quiniela:S.quiniela})); } catch(e){}
+      if (S.quiniela && !S.quiniela.entryId) {
+        const entryId = await fbSubmitPick(S.quiniela.groupCode, S.quiniela.displayName, S);
+        S = {...S, quiniela:{...S.quiniela, entryId}};
+        try { localStorage.setItem('fifa-quiniela-session', JSON.stringify({quiniela:S.quiniela})); } catch(e){}
+      }
       dispatch({type:'SHOW_LEADERBOARD'});
     } catch(e) {
-      btn.disabled=false; btn.textContent='✅ Guardar picks';
+      btn.disabled=false; btn.textContent='Terminar y ver quiniela →';
       alert('Error al guardar. Verifica tu conexión.');
     }
-  });
+  };
+  wrap.querySelector('#finish-btn')?.addEventListener('click', async (e)=>{ finishAndSubmit(e.currentTarget); });
   wrap.querySelector('#submit-results-btn')?.addEventListener('click', async ()=>{
     const btn = wrap.querySelector('#submit-results-btn');
     btn.disabled=true; btn.textContent='Calculando...';
