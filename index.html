@@ -377,6 +377,15 @@ async function fbSubmitPick(groupCode, displayName, bracketState) {
   return ref.id;
 }
 
+async function fbUpdatePick(groupCode, entryId, bracketState) {
+  await db.collection('groups').doc(groupCode).collection('entries').doc(entryId).update({
+    groupStandings: bracketState.groupStandings,
+    selectedBestThird: bracketState.selectedBestThird,
+    bracket: bracketState.bracket,
+    champion: bracketState.bracket?.champion || null,
+  });
+}
+
 async function fbSubmitResults(groupCode, adminPassword, bracketState) {
   const doc = await db.collection('groups').doc(groupCode).get();
   if (!doc.exists || doc.data().adminPassword !== adminPassword) throw new Error('invalid_admin');
@@ -840,7 +849,7 @@ function reduce(s, a) {
       const nb = pickWinner(s.bracket,a.roundKey,a.matchId,a.winner);
       const fm = nb.final?.[0];
       if(fm?.winner) nb.champion = fm.winner;
-      return {...s,bracket:nb};
+      return {...s, bracket:nb, _showBracket: false};
     }
     case 'RESET_ALL': return {...JSON.parse(JSON.stringify(INIT)),tab:s.tab};
     case 'SET_LOBBY_STEP': return {...s, lobbyStep:a.step};
@@ -956,7 +965,7 @@ function render() {
     appEl.appendChild(wrap);
     bindBestThird(wrap);
   } else {
-    if (S.bracket?.champion) {
+    if (S.bracket?.champion && !S._showBracket) {
       wrap.innerHTML = banner + renderChampion(S.bracket.champion);
     } else {
       wrap.innerHTML = banner + renderBracket();
@@ -1478,10 +1487,8 @@ function bindBracket(wrap) {
       dispatch({type:'RESET_ALL'});
   });
   wrap.querySelector('#view-bracket-btn')?.addEventListener('click', () => {
-    // temporarily clear champion to show bracket
-    const tmp = JSON.parse(JSON.stringify(S.bracket));
-    tmp.champion = null;
-    S = {...S, bracket: tmp};
+    // Mostrar bracket sin borrar el campeón — usamos flag temporal
+    S = {...S, _showBracket: true};
     render();
   });
   wrap.querySelectorAll('.bracket-team[data-team][data-round][data-matchid]').forEach(el => {
@@ -1494,10 +1501,15 @@ function bindBracket(wrap) {
   const finishAndSubmit = async (btn) => {
     btn.disabled=true; btn.textContent='Guardando...';
     try {
-      if (S.quiniela && !S.quiniela.entryId) {
-        const entryId = await fbSubmitPick(S.quiniela.groupCode, S.quiniela.displayName, S);
-        S = {...S, quiniela:{...S.quiniela, entryId}};
-        try { localStorage.setItem('fifa-quiniela-session', JSON.stringify({quiniela:S.quiniela})); } catch(e){}
+      if (S.quiniela) {
+        if (!S.quiniela.entryId) {
+          const entryId = await fbSubmitPick(S.quiniela.groupCode, S.quiniela.displayName, S);
+          S = {...S, quiniela:{...S.quiniela, entryId}};
+          try { localStorage.setItem('fifa-quiniela-session', JSON.stringify({quiniela:S.quiniela})); } catch(e){}
+        } else {
+          // Actualizar entrada existente (ej: usuario completó bracket después del primer guardado)
+          await fbUpdatePick(S.quiniela.groupCode, S.quiniela.entryId, S);
+        }
       }
       dispatch({type:'SHOW_LEADERBOARD'});
     } catch(e) {
