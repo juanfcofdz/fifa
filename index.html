@@ -278,6 +278,35 @@ button{cursor:pointer;font-family:inherit;font-size:inherit;border:none;backgrou
 .lb-score-cell{font-size:14px;white-space:nowrap;}
 .th-sub{font-size:10px;font-weight:400;opacity:.7;}
 .pick-flag{display:inline-block;}
+/* ── Admin ───────────────────────────────── */
+.admin-page{display:flex;justify-content:center;padding:var(--sp-xl) var(--sp-md);}
+.admin-card{background:var(--color-surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);padding:32px 28px;max-width:680px;width:100%;}
+.admin-title{font-size:18px;font-weight:700;margin-bottom:4px;}
+.admin-sub{font-size:13px;color:var(--color-muted);margin-bottom:20px;}
+.admin-step-bar{display:flex;gap:4px;margin-bottom:24px;flex-wrap:wrap;}
+.admin-step-dot{width:28px;height:6px;border-radius:3px;background:var(--color-border);}
+.admin-step-dot.done{background:var(--mx-green);}
+.admin-step-dot.active{background:var(--mx-green);opacity:.5;}
+.admin-round-label{font-size:13px;font-weight:700;color:var(--color-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+.admin-round-title{font-size:16px;font-weight:700;margin-bottom:4px;}
+.admin-counter{font-size:13px;color:var(--color-muted);margin-bottom:16px;}
+.admin-counter strong{color:var(--mx-green);}
+.admin-counter.full strong{color:var(--mx-red);}
+.admin-team-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px;}
+.admin-team-chip{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:20px;border:1.5px solid var(--color-border);background:var(--color-surface);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;user-select:none;}
+.admin-team-chip:hover{border-color:var(--color-border-2);background:var(--color-surface-2);}
+.admin-team-chip.selected{background:#e8f5ee;border-color:var(--mx-green);color:var(--mx-green);}
+.admin-team-chip.selected .chip-check{display:inline;}
+.chip-check{display:none;font-size:11px;font-weight:700;}
+.admin-nav{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+.admin-status-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:24px;}
+.admin-status-item{background:var(--color-bg);border-radius:var(--radius);padding:10px 14px;border:1px solid var(--color-border);}
+.admin-status-item.has-data{border-color:var(--mx-green);background:#f0faf5;}
+.admin-status-label{font-size:11px;color:var(--color-muted);text-transform:uppercase;letter-spacing:.4px;}
+.admin-status-val{font-size:14px;font-weight:600;margin-top:2px;}
+.admin-success{background:#e8f5ee;border:1px solid var(--mx-green);border-radius:var(--radius);padding:12px 16px;font-size:13px;color:var(--mx-green);margin-top:12px;}
+.admin-link{font-size:12px;color:var(--color-muted);text-decoration:underline;cursor:pointer;display:block;text-align:center;margin-top:16px;}
+.admin-link:hover{color:var(--color-text);}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -308,6 +337,7 @@ firebase.initializeApp({
   messagingSenderId: "734245960970",
   appId: "1:734245960970:web:46b3288d89458f06bb4ef3"
 });
+const GLOBAL_ADMIN_PASSWORD = 'FIFA2026ADMIN';
 const db = firebase.firestore();
 
 function randCode(len, chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789') {
@@ -381,6 +411,38 @@ async function fbLoadLeaderboard(groupCode) {
   return { entries, hasResults };
 }
 
+async function fbSaveOfficialResults(password, results) {
+  if (password !== GLOBAL_ADMIN_PASSWORD) throw new Error('wrong_password');
+  await db.collection('official_results').doc('current').set({
+    ...results,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+}
+
+async function fbLoadOfficialResults() {
+  const doc = await db.collection('official_results').doc('current').get();
+  return doc.exists ? doc.data() : null;
+}
+
+async function fbRecalculateAllScores(official) {
+  const groupsSnap = await db.collection('groups').get();
+  let totalUpdated = 0;
+  for (const groupDoc of groupsSnap.docs) {
+    const entriesSnap = await groupDoc.ref.collection('entries').get();
+    const batch = db.batch();
+    let batchSize = 0;
+    entriesSnap.docs.forEach(d => {
+      if (d.id === 'resultados_oficiales') return;
+      const score = computeScoreVsOfficial(d.data(), official);
+      batch.update(d.ref, { score });
+      batchSize++;
+      totalUpdated++;
+    });
+    if (batchSize > 0) await batch.commit();
+  }
+  return totalUpdated;
+}
+
 function getR32Teams(state) {
   const teams = new Set();
   const gs = state.groupStandings || {};
@@ -435,6 +497,24 @@ function computeScore(userState, realState) {
     score += 32;
   }
 
+  return score;
+}
+
+function computeScoreVsOfficial(userState, official) {
+  if (!userState || !official) return 0;
+  let score = 0;
+  const rounds = [
+    { userSet: getR32Teams(userState),                                offArr: official.r32,    pts: 1  },
+    { userSet: getTeamsInRound(userState.bracket, 'roundOf16'),       offArr: official.r16,    pts: 2  },
+    { userSet: getTeamsInRound(userState.bracket, 'quarterFinals'),   offArr: official.qf,     pts: 4  },
+    { userSet: getTeamsInRound(userState.bracket, 'semiFinals'),      offArr: official.sf,     pts: 8  },
+    { userSet: getTeamsInRound(userState.bracket, 'final'),           offArr: official.final,  pts: 16 },
+  ];
+  for (const {userSet, offArr, pts} of rounds) {
+    const offSet = new Set(offArr || []);
+    userSet.forEach(t => { if (offSet.has(t)) score += pts; });
+  }
+  if (userState.bracket?.champion && userState.bracket.champion === official.champion) score += 32;
   return score;
 }
 
@@ -707,6 +787,7 @@ const INIT = {
   lobbyStep:'main',
   quiniela:null,
   leaderboardData:null,
+  adminState: null,
   groupStandings: JSON.parse(JSON.stringify(DEFAULT_GROUPS)),
   thirdPlaceTeams:[], selectedBestThird:[], bracket:null,
 };
@@ -780,6 +861,46 @@ function reduce(s, a) {
       try { localStorage.removeItem('fifa-quiniela-session'); } catch(e){}
       return {...JSON.parse(JSON.stringify(INIT)), tab:s.tab, phase:'lobby', lobbyStep:'main', quiniela:null};
     }
+    case 'ENTER_ADMIN':
+      return {...s, phase:'admin', adminState:{step:-1, r32:[], r16:[], qf:[], sf:[], final:[], champion:null, saving:false, saved:false, recalcStats:null, error:null, loadingExisting:false}};
+    case 'ADMIN_AUTH':
+      return {...s, adminState:{...s.adminState, step:0}};
+    case 'ADMIN_LOAD_EXISTING':
+      return {...s, adminState:{...s.adminState, loadingExisting:true}};
+    case 'ADMIN_SET_EXISTING': {
+      const r = a.data;
+      return {...s, adminState:{...s.adminState, loadingExisting:false,
+        r32: r.r32||[], r16: r.r16||[], qf: r.qf||[], sf: r.sf||[], final: r.final||[],
+        champion: r.champion||null,
+        step: r.champion ? 6 : r.final?.length===2 ? 5 : r.sf?.length===4 ? 4 : r.qf?.length===8 ? 3 : r.r16?.length===16 ? 2 : r.r32?.length===32 ? 1 : 0
+      }};
+    }
+    case 'ADMIN_TOGGLE_TEAM': {
+      const as = s.adminState;
+      const key = a.key;
+      const max = {r32:32,r16:16,qf:8,sf:4,final:2,champion:1}[key];
+      const cur = as[key];
+      const isArr = Array.isArray(cur);
+      if (!isArr) {
+        // champion
+        return {...s, adminState:{...as, champion: as.champion===a.team?null:a.team}};
+      }
+      const has = cur.includes(a.team);
+      if (!has && cur.length >= max) return s;
+      return {...s, adminState:{...as, [key]: has ? cur.filter(t=>t!==a.team) : [...cur, a.team]}};
+    }
+    case 'ADMIN_NEXT_STEP':
+      return {...s, adminState:{...s.adminState, step: s.adminState.step + 1}};
+    case 'ADMIN_PREV_STEP':
+      return {...s, adminState:{...s.adminState, step: Math.max(0, s.adminState.step - 1)}};
+    case 'ADMIN_SAVING':
+      return {...s, adminState:{...s.adminState, saving:true, error:null}};
+    case 'ADMIN_SAVED':
+      return {...s, adminState:{...s.adminState, saving:false, saved:true, recalcStats:a.stats, error:null}};
+    case 'ADMIN_ERROR':
+      return {...s, adminState:{...s.adminState, saving:false, error:a.msg}};
+    case 'EXIT_ADMIN':
+      return {...s, phase:'lobby', adminState:null};
     default: return s;
   }
 }
@@ -813,6 +934,12 @@ function render() {
     if (!S.leaderboardData) {
       fbLoadLeaderboard(S.quiniela.groupCode).then(data => dispatch({type:'SET_LEADERBOARD_DATA',data})).catch(err => dispatch({type:'SET_LEADERBOARD_DATA',data:{error:err.message||'Error de conexión'}}));
     }
+    return;
+  }
+  if (S.phase==='admin') {
+    wrap.innerHTML = renderAdmin();
+    appEl.appendChild(wrap);
+    bindAdmin(wrap);
     return;
   }
   let banner = '';
@@ -852,6 +979,7 @@ function renderLobby() {
       <button class="lobby-btn secondary" id="lb-join">🔑 Unirse a quiniela</button>
       <div class="lobby-divider"><span>o</span></div>
       <button class="btn-ghost" id="lb-solo">Jugar sin quiniela →</button>
+      <span class="admin-link" id="lb-admin">Administrador</span>
     </div></div>`;
   }
   if (S.lobbyStep==='creating') {
@@ -911,6 +1039,7 @@ function bindLobby(wrap) {
   wrap.querySelector('#lb-create')?.addEventListener('click', ()=>dispatch({type:'SET_LOBBY_STEP',step:'creating'}));
   wrap.querySelector('#lb-join')?.addEventListener('click', ()=>dispatch({type:'SET_LOBBY_STEP',step:'joining'}));
   wrap.querySelector('#lb-solo')?.addEventListener('click', ()=>dispatch({type:'ENTER_SOLO'}));
+  wrap.querySelector('#lb-admin')?.addEventListener('click', ()=>dispatch({type:'ENTER_ADMIN'}));
   wrap.querySelector('#lb-back')?.addEventListener('click', ()=>{ S._pendingQuiniela=null; S._joinedQuiniela=null; dispatch({type:'SET_LOBBY_STEP',step:'main'}); });
 
   const createBtn = wrap.querySelector('#lb-create-submit');
@@ -1388,6 +1517,195 @@ function bindBracket(wrap) {
       btn.disabled=false; btn.textContent='📊 Calcular puntos';
       if(e.message==='invalid_admin') alert('Contraseña de admin incorrecta.');
       else alert('Error al calcular puntos. Intenta de nuevo.');
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// ADMIN
+// ─────────────────────────────────────────────────────────────
+const ADMIN_STEPS = [
+  { key:'r32',      label:'Dieciseisavos de Final', count:32, pts:'1 pt c/u = 32 pts' },
+  { key:'r16',      label:'Octavos de Final',       count:16, pts:'2 pts c/u = 32 pts' },
+  { key:'qf',       label:'Cuartos de Final',       count:8,  pts:'4 pts c/u = 32 pts' },
+  { key:'sf',       label:'Semifinales',            count:4,  pts:'8 pts c/u = 32 pts' },
+  { key:'final',    label:'Final',                  count:2,  pts:'16 pts c/u = 32 pts' },
+  { key:'champion', label:'Campeón',                count:1,  pts:'32 pts' },
+];
+
+function getAdminPool(as, stepIdx) {
+  if (stepIdx === 0) return Object.keys(TEAMS);
+  const prevKey = ADMIN_STEPS[stepIdx - 1].key;
+  if (prevKey === 'champion') return as.final || [];
+  return as[prevKey] || [];
+}
+
+function renderAdmin() {
+  const as = S.adminState;
+  if (!as) return '';
+
+  // Login step
+  if (as.step === -1) {
+    return `<div class="admin-page"><div class="admin-card">
+      <div style="font-size:28px;margin-bottom:8px">🔐</div>
+      <div class="admin-title">Panel de Administrador</div>
+      <div class="admin-sub">Ingresa la contraseña global para gestionar los resultados oficiales del torneo</div>
+      <input class="lobby-input" id="admin-pass" type="password" placeholder="Contraseña de administrador" />
+      <div class="lobby-error hidden" id="admin-err"></div>
+      <button class="lobby-btn primary" id="admin-login-btn">Entrar →</button>
+      <button class="btn-ghost" id="admin-back-btn" style="width:100%;margin-top:8px">← Volver</button>
+    </div></div>`;
+  }
+
+  // Status overview (step 6 = saved/review)
+  if (as.step === 6) {
+    const statusItems = [
+      { label:'R32 — Dieciseisavos', val: as.r32.length,     max:32 },
+      { label:'Octavos de Final',    val: as.r16.length,     max:16 },
+      { label:'Cuartos de Final',    val: as.qf.length,      max:8  },
+      { label:'Semifinales',         val: as.sf.length,      max:4  },
+      { label:'Finalistas',          val: as.final.length,   max:2  },
+      { label:'🏆 Campeón',          val: as.champion?1:0,   max:1  },
+    ];
+    const grid = statusItems.map(si => `
+      <div class="admin-status-item ${si.val===si.max?'has-data':''}">
+        <div class="admin-status-label">${si.label}</div>
+        <div class="admin-status-val">${si.val===si.max?(si.label.includes('Campeón')?`${TEAMS[as.champion]?.flag||''} ${as.champion}`:`${si.val}/${si.max} ✓`):`${si.val}/${si.max}`}</div>
+      </div>`).join('');
+    const canSave = as.r32.length===32 && as.r16.length===16 && as.qf.length===8 && as.sf.length===4 && as.final.length===2 && as.champion;
+    const savedBlock = as.saved ? `<div class="admin-success">✅ Resultados guardados y puntos recalculados para ${as.recalcStats?.count||0} participantes en todas las quinielas.</div>` : '';
+    const errBlock = as.error ? `<div style="color:var(--mx-red);font-size:13px;margin-top:8px">${as.error}</div>` : '';
+    return `<div class="admin-page"><div class="admin-card">
+      <div class="admin-title">Resultados Oficiales</div>
+      <div class="admin-sub">Revisa y guarda los resultados. Se recalcularán los puntos de todos los participantes en todas las quinielas.</div>
+      <div class="admin-status-grid">${grid}</div>
+      ${savedBlock}${errBlock}
+      <div class="admin-nav">
+        <button class="btn-ghost" id="admin-edit-btn">✏️ Editar resultados</button>
+        <button class="btn-cta" id="admin-save-btn" ${!canSave||as.saving?'disabled':''}>
+          ${as.saving?'Guardando...':'💾 Guardar y recalcular puntos'}
+        </button>
+      </div>
+      <div style="margin-top:16px"><button class="btn-ghost" id="admin-back-btn" style="font-size:12px">← Volver al inicio</button></div>
+    </div></div>`;
+  }
+
+  // Selection step (0–5)
+  const stepCfg = ADMIN_STEPS[as.step];
+  const pool = getAdminPool(as, as.step);
+  const selected = as.step < 5 ? (as[stepCfg.key] || []) : [as.champion].filter(Boolean);
+  const isChampion = stepCfg.key === 'champion';
+  const count = selected.length;
+  const isFull = count >= stepCfg.count;
+
+  const dots = ADMIN_STEPS.map((_, i) =>
+    `<div class="admin-step-dot ${i < as.step ? 'done' : i === as.step ? 'active' : ''}"></div>`
+  ).join('');
+
+  const chips = pool.map(team => {
+    const t = TEAMS[team];
+    const isSel = selected.includes(team);
+    const disabled = !isSel && isFull;
+    return `<button class="admin-team-chip ${isSel?'selected':''} ${disabled?'disabled':''}"
+      data-team="${team}" data-key="${stepCfg.key}"
+      ${disabled?'disabled':''}>
+      <span>${t?.flag||'🏳'}</span><span>${team}</span>
+      <span class="chip-check">✓</span>
+    </button>`;
+  }).join('');
+
+  const canNext = count === stepCfg.count;
+  return `<div class="admin-page"><div class="admin-card">
+    <div class="admin-step-bar">${dots}</div>
+    <div class="admin-round-label">Paso ${as.step+1} de ${ADMIN_STEPS.length}</div>
+    <div class="admin-round-title">${stepCfg.label}</div>
+    <div class="admin-counter ${isFull?'full':''}">
+      Seleccionados: <strong>${count}</strong> / ${stepCfg.count} &nbsp;·&nbsp; ${stepCfg.pts}
+    </div>
+    <div class="admin-team-grid">${chips}</div>
+    <div class="admin-nav">
+      ${as.step > 0 ? `<button class="btn-ghost" id="admin-prev-btn">← Atrás</button>` : `<button class="btn-ghost" id="admin-exit-btn">← Salir</button>`}
+      <button class="btn-cta" id="admin-next-btn" ${!canNext?'disabled':''}>
+        ${as.step < ADMIN_STEPS.length - 1 ? 'Siguiente →' : 'Revisar →'}
+      </button>
+    </div>
+    <div style="margin-top:16px">
+      <button class="btn-ghost" id="admin-load-btn" style="font-size:12px;color:var(--color-muted)">${as.loadingExisting?'Cargando...':'↓ Cargar resultados existentes'}</button>
+    </div>
+  </div></div>`;
+}
+
+function bindAdmin(wrap) {
+  const as = S.adminState;
+  if (!as) return;
+
+  // Login
+  wrap.querySelector('#admin-login-btn')?.addEventListener('click', () => {
+    const pass = wrap.querySelector('#admin-pass')?.value?.trim();
+    const err = wrap.querySelector('#admin-err');
+    if (pass !== GLOBAL_ADMIN_PASSWORD) {
+      err.textContent = 'Contraseña incorrecta.';
+      err.classList.remove('hidden');
+      return;
+    }
+    dispatch({type:'ADMIN_AUTH'});
+  });
+  wrap.querySelector('#admin-pass')?.addEventListener('keydown', e => {
+    if (e.key==='Enter') wrap.querySelector('#admin-login-btn')?.click();
+  });
+
+  // Back / Exit
+  wrap.querySelector('#admin-back-btn')?.addEventListener('click', ()=>dispatch({type:'EXIT_ADMIN'}));
+  wrap.querySelector('#admin-exit-btn')?.addEventListener('click', ()=>dispatch({type:'EXIT_ADMIN'}));
+
+  // Team chips
+  wrap.querySelectorAll('.admin-team-chip:not([disabled])').forEach(chip => {
+    chip.addEventListener('click', () => {
+      dispatch({type:'ADMIN_TOGGLE_TEAM', key:chip.dataset.key, team:chip.dataset.team});
+    });
+  });
+
+  // Prev / Next
+  wrap.querySelector('#admin-prev-btn')?.addEventListener('click', ()=>dispatch({type:'ADMIN_PREV_STEP'}));
+  wrap.querySelector('#admin-next-btn')?.addEventListener('click', ()=>dispatch({type:'ADMIN_NEXT_STEP'}));
+
+  // Edit (go back to step 0)
+  wrap.querySelector('#admin-edit-btn')?.addEventListener('click', ()=>{
+    S = {...S, adminState:{...S.adminState, step:0, saved:false}};
+    render();
+  });
+
+  // Save
+  wrap.querySelector('#admin-save-btn')?.addEventListener('click', async ()=>{
+    dispatch({type:'ADMIN_SAVING'});
+    try {
+      const as = S.adminState;
+      const official = { r32:as.r32, r16:as.r16, qf:as.qf, sf:as.sf, final:as.final, champion:as.champion };
+      await fbSaveOfficialResults(GLOBAL_ADMIN_PASSWORD, official);
+      const count = await fbRecalculateAllScores(official);
+      dispatch({type:'ADMIN_SAVED', stats:{count}});
+    } catch(e) {
+      dispatch({type:'ADMIN_ERROR', msg: e.message||'Error al guardar. Intenta de nuevo.'});
+    }
+  });
+
+  // Load existing
+  wrap.querySelector('#admin-load-btn')?.addEventListener('click', async ()=>{
+    if (as.loadingExisting) return;
+    dispatch({type:'ADMIN_LOAD_EXISTING'});
+    try {
+      const data = await fbLoadOfficialResults();
+      if (data) {
+        dispatch({type:'ADMIN_SET_EXISTING', data});
+      } else {
+        S = {...S, adminState:{...S.adminState, loadingExisting:false}};
+        render();
+        alert('No hay resultados guardados aún.');
+      }
+    } catch(e) {
+      S = {...S, adminState:{...S.adminState, loadingExisting:false}};
+      render();
+      alert('Error al cargar: ' + e.message);
     }
   });
 }
